@@ -9,7 +9,7 @@ avoiding obstacles, reaching arbitrary goals to **~2–3 cm**.
 
 ![NMPC navigation in RViz](docs/results/02_rviz_navigation.png)
 
-> **Stack:** ROS 2 Jazzy · Gazebo Harmonic · Rviz2 · Python · CasADi/IPOPT · slam_toolbox
+> **Stack:** ROS 2 Jazzy · Gazebo Harmonic · RViz2 · Python · CasADi/IPOPT · slam_toolbox
 > **Course:** ME 5659 — Optimal Control, Northeastern University
 
 ---
@@ -126,7 +126,7 @@ nmpc-diffdrive-navigation/        # repo root (ROS 2 package: nmpc_robot_nav)
 
 - Ubuntu 24.04, **ROS 2 Jazzy**, **Gazebo Harmonic** (gz-sim 8)
 - Python: `casadi`, `scipy`, `numpy`
-- ROS packages: `slam_toolbox`, `ros_gz_bridge`, `ros_gz_sim`,
+- ROS packages: `slam_toolbox`, `rviz2`, `ros_gz_bridge`, `ros_gz_sim`,
   `robot_state_publisher`, `joint_state_publisher`, `xacro`
 
 ### Build

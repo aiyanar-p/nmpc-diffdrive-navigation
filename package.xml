@@ -26,6 +26,11 @@
   <depend>robot_state_publisher</depend>
   <depend>joint_state_publisher</depend>
   <depend>xacro</depend>
+  <depend>rviz2</depend>
+  <depend>lifecycle_msgs</depend>
+
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
