@@ -9,7 +9,7 @@ avoiding obstacles, reaching arbitrary goals to **~2–3 cm**.
 
 ![NMPC navigation in RViz](docs/results/02_rviz_navigation.png)
 
-> **Stack:** ROS 2 Jazzy · Gazebo Harmonic · Python · CasADi/IPOPT · slam_toolbox
+> **Stack:** ROS 2 Jazzy · Gazebo Harmonic · Rviz2 · Python · CasADi/IPOPT · slam_toolbox
 > **Course:** ME 5659 — Optimal Control, Northeastern University
 
 ---
