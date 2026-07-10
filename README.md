@@ -19,10 +19,10 @@ avoiding obstacles, reaching arbitrary goals to **~2–3 cm**.
 _A one-minute screen recording of a full navigation run — online mapping,
 planning through the obstacle field, and precise final parking._
 
-<!-- Add the inline video here (one time, after pushing): open this README on
-     GitHub, click the pencil (Edit) icon, place the cursor on the blank line
-     below, and drag docs/results/simulation.mp4 into the editor. GitHub uploads
-     it and inserts an inline <video> player. Then commit the change. -->
+
+
+https://github.com/user-attachments/assets/7e99ad67-60b1-4c56-953a-981ac5035715
+
 
 
 ## Overview
@@ -211,7 +211,7 @@ All parameters live in `config/nmpc_params.yaml` (commented). Notable ones:
 
 ## Author
 
-**Pradeep Sivaa Aiyanar** — ME 5659 (Optimal Control), Northeastern University.
+**Pradeep Sivaa Aiyanar** — ME 5659 (Controls Systems Engineering), Northeastern University.
 
 ## License
 
