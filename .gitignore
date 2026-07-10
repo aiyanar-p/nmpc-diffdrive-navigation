@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+*.egg
+
+# colcon / ament (when the package is built inside a workspace)
+build/
+install/
+log/
+
+# ROS / SLAM runtime artifacts
+*.pgm
+*.posegraph
+*.data
+
+# Debug captures
+planner_debug_*.png
+
+# Demo video — hosted as a GitHub attachment (drag-drop into the README),
+# not committed so the repo stays lightweight to clone.
+docs/results/*.mp4
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

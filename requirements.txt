@@ -1,0 +1,5 @@
+# Python dependencies (install with: pip install -r requirements.txt)
+# ROS 2 packages are handled by rosdep (see README).
+casadi>=3.6
+scipy>=1.10
+numpy>=1.24

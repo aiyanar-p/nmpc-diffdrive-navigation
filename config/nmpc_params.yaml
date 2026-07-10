@@ -1,0 +1,186 @@
+nmpc_controller:
+  ros__parameters:
+    # ── NMPC Horizon ─────────────────────────────────────────
+    N:   20          # horizon: 20×0.2s×0.5m/s = 2.0m lookahead — same NLP size, double spatial reach
+    Ts:  0.2         # sampling time (s) — NMPC runs at 5 Hz; doubles horizon AND solve budget to 200ms
+
+    # ── Cost weights ─────────────────────────────────────────
+    # Q: penalise distance to goal [x, y, theta]
+    Q_diag:  [12.0, 12.0, 0.5]
+    # R: penalise control effort [v, omega]
+    R_diag:  [0.5,  1.0]
+    # R_du: penalise successive control changes [Δv, Δω] — suppresses chattering near obstacles
+    # Based on: De Souza et al. (2022) "Smooth Reference Tracking of a Mobile Robot using NMPC"
+    R_du_diag: [0.1, 0.02]  # reduced: allow sharper avoidance turns near obstacles
+    # Terminal state weight multiplier (Q_N = q_terminal * Q)
+    q_terminal: 4.0
+
+    # ── Velocity limits ───────────────────────────────────────
+    v_max:      0.5      # m/s — conservative: at 90ms latency, overshoot = 4.5cm
+    v_min:      0.0      # no reverse by default
+    omega_max:  1.0      # rad/s
+
+    # ── Obstacle avoidance ────────────────────────────────────
+    # Obstacle true radius = 0.5m, robot collision radius ≈ 0.21m.
+    # margin = robot_body(0.21) + timing_buffer(0.09) + clearance(0.20) = 0.50m
+    safety_margin:  0.50  # metres — keeps robot edge 0.20m clear of obstacle surface
+    max_obstacles:  4     # 4 closest: 4×20=80 slack vars — NLP fits in 100ms budget
+    slack_penalty:  200000.0 # 4× increase: makes straight-through violation (200k×S²) dominate goal cost
+
+    # ── Goal ─────────────────────────────────────────────────
+    # Default goal — can be overridden by /goal_pose topic from RViz
+    goal_x:  13.0
+    goal_y:   0.0
+    goal_tol: 0.03   # metres — declare success within this radius (Phase 3: tightened
+                     # 0.40 -> 0.10 -> 0.03 for tightest final stop; the speed taper lets
+                     # the robot creep in and stop close.  Clean approaches hit ~3 cm.)
+    # "Arrived & settled" fallback: on cluttered approaches the speed taper + sim
+    # deadband can stall the robot a few cm SHORT of goal_tol, so it stops at the
+    # goal but never crosses the tight radius and GOAL REACHED never prints.  If it
+    # is within goal_settle_tol AND has stopped (|v| < settle_speed) for
+    # settle_cycles, declare success at the honest settled distance.
+    goal_settle_tol: 0.12   # m   — "close enough" band for the settle fallback
+    settle_speed:    0.02   # m/s — |body velocity| below this counts as stopped
+    settle_cycles:   10     # cycles (~2 s at 5 Hz) stopped near goal => reached
+    # If the robot stops for this many cycles but is NOT near the goal (outside
+    # goal_settle_tol), the goal is unreachable (too close to an obstacle) — warn
+    # once instead of sitting silently with no GOAL REACHED.
+    blocked_cycles:  25     # cycles (~5 s) stopped & far => "goal unreachable" warn
+
+    # ── Reverse-capable terminal controller (final parking) ───────────
+    # For the last stretch, hand off from NMPC/MPCC to a simple go-to-point law
+    # that can DRIVE or REVERSE straight to the clicked goal.  A forward-only
+    # robot that overshoots an awkwardly-approached OPEN goal cannot back up
+    # under the NMPC and hunts/loops (scenario 3); this picks forward or reverse
+    # by whichever needs less turning, so it always converges.  Only engages in
+    # the open (no obstacle within ~0.9 m) — near obstacles the NMPC keeps
+    # handling avoidance.  Set use_terminal_ctrl:false to revert instantly.
+    use_terminal_ctrl: true
+    terminal_radius:   0.5   # m   — engage the terminal controller within this range
+    term_k_rho:        1.5   # distance gain  (v = term_k_rho * distance_to_goal)
+    term_k_alpha:      2.5   # heading  gain  (w = term_k_alpha * heading_error)
+    v_rev_max:         0.2   # m/s — max reverse speed during terminal parking
+
+    # ── Solver ───────────────────────────────────────────────
+    solver_max_iter: 100    # IPOPT cap — acceptable_iter=3 exits at ~5-10 iters (→ ~25ms warm-started)
+    use_warm_start:  true
+    use_rti:         false  # false = IPOPT (handles indefinite Hessian); true = sqpmethod/qrqp (fails near obstacles)
+
+    # ── Global path (A*) tracking ─────────────────────────────
+    # Track a lookahead ("carrot") point along /global_path instead of aiming
+    # straight at the far goal — the global(A*)+local(NMPC) hierarchy.
+    use_global_path: true
+    lookahead_dist:  1.2    # metres ahead along the path — ~= N·Ts·v_max horizon reach
+
+    # ── SLAM pose fusion (Phase 2: drift-corrected map-frame control) ──
+    # Fuse the SLAM map→base_link pose into the EKF so the NMPC controls in the
+    # drift-free MAP frame → the robot reaches the true world goal (not a drifting
+    # odom target) and the RViz map stops tilting relative to the plan.  Gating
+    # rejects large single-cycle jumps (bad scan matches) so map drift / loop
+    # closure cannot destabilise control; a sustained offset re-syncs after
+    # fuse_max_rejects cycles.  Set fuse_slam_pose:false to revert to odom-only.
+    fuse_slam_pose:   true
+    fuse_gate_pos:    0.5    # m   — reject a pose jump larger than this
+    fuse_gate_th:     0.5    # rad
+    fuse_max_rejects: 10     # consecutive rejects before force re-sync (loop closure)
+
+    # ── MPCC (Model Predictive Contouring Control) ────────────
+    # Follow the A* path as a contour (arc-length progress + contour/lag error)
+    # instead of chasing a carrot.  Carrot NMPC stays the fallback (no path /
+    # near goal / solver fail).  Set use_mpcc:false to revert entirely.
+    use_mpcc:    true
+    mpcc_qc:     30.0   # contour-error weight — how hard to stay ON the path (lateral)
+    mpcc_ql:     10.0   # lag-error weight — keeps progress var aligned with the robot
+    mpcc_qprog:  6.0    # progress reward — how eagerly to advance along the path
+    mpcc_qth:    1.0    # heading-alignment weight (small; face along the path)
+    mpcc_reach:  3.0    # m — length of path window fit ahead of the robot each cycle
+    mpcc_max_iter: 100  # full iters — a capped 40 starved hard goals (turn-arounds),
+                        # causing "partial iterate" dithering.  Reliability > solve-time.
+
+    # ── Rotate-in-place (fixes looping toward off-heading goals) ──
+    # A forward-only diff-drive arcs into a loop when the goal is beside/behind
+    # it.  When the heading error to the path/goal exceeds rotate_thresh, spin in
+    # place (v=0) toward it first, then drive.  Turning in place is collision-safe.
+    rotate_in_place: true
+    rotate_thresh:   1.2    # rad (~69°) — only genuine turn-arounds, not path curves
+    rotate_gain:     1.5    # rad/s per rad of heading error (clamped to omega_max)
+
+obstacle_detector:
+  ros__parameters:
+    # ── LiDAR filtering ──────────────────────────────────────
+    max_range:       10.0
+    min_range:        0.15
+
+    # ── Clustering ───────────────────────────────────────────
+    cluster_tol:     0.4
+    min_cluster_pts: 2
+    max_cluster_pts: 40
+
+    # ── Output ───────────────────────────────────────────────
+    max_obstacles:          10
+    obstacle_radius_padding: 0.05
+    max_obstacle_radius:     0.8
+
+    # ── EMA obstacle smoother ─────────────────────────────────
+    # α=0.35 → new data has 35% weight, history has 65%
+    # Reduces jitter without adding lag to real motion
+    ema_alpha:           0.35
+    ema_match_dist:      1.0   # metres — max distance to associate a cluster
+    ema_max_miss_frames: 4     # frames before a track is dropped
+
+
+global_planner:
+  ros__parameters:
+    # ── Robot footprint / inflation ───────────────────────────
+    # Robot collision radius ≈ chassis half-diagonal ≈ 0.21 m.  Cells within
+    # (robot_radius + inflation_margin) of an obstacle are lethal for the plan;
+    # the reactive NMPC keeps a larger safety_margin (0.50 m) on top of this.
+    robot_radius:          0.21   # m
+    # inflation_radius = robot_radius + margin = 0.51 m from an obstacle SURFACE,
+    # i.e. ~1.0 m from its centre — matched to the NMPC's clearance
+    # (r_obs + safety_margin ≈ 1.05 m) so the global path only routes where the
+    # NMPC is actually willing to drive.  The ~2 m inter-obstacle gaps stay open.
+    # Tight obstacle field: gaps are only ~3 m centre-to-centre, so keep the
+    # lethal inflation SMALL or the halos merge and close every corridor (the
+    # planner then routes all the way around).  0.10 m keeps the robot centre
+    # ≥0.31 m off each surface (edge ≥0.10 m); the NMPC adds its own reactive
+    # clearance on top, so the global path only needs to be geometrically clear.
+    inflation_margin:      0.10   # m — global-plan clearance beyond the body
+    # Keep the soft cost GENTLE: a high weight makes A* avoid narrow gaps and take
+    # long detours.  0.5 just nudges the path toward gap centres without detouring.
+    inflation_cost_weight: 0.5    # soft-cost magnitude at the lethal edge
+    inflation_decay:       2.5    # 1/m — soft-cost decays with clearance (centre-hugging)
+
+    # ── Occupancy interpretation ──────────────────────────────
+    occupied_thresh: 65           # OccupancyGrid value ≥ → obstacle
+    allow_unknown:   true         # treat unknown (-1) as traversable (partial live map)
+
+    # ── A* search ─────────────────────────────────────────────
+    planning_downsample: 1        # native 0.05 m cells — do NOT fatten obstacles via pooling
+                                  # (×2 pooling closed the ~3 m inter-cylinder gaps)
+    heuristic_weight:    1.0       # 1.0 = optimal; >1 = faster weighted A*
+    allow_diagonal:      true      # 8-connected (corner-cutting blocked)
+    replan_period:       1.5       # s between replans (slower = steadier path, less target
+                                   # thrash; also replans immediately on new goal)
+
+    # ── Path hysteresis (stops A* route-flipping that jerks the controller) ──
+    # A* can return two nearly-equal-length routes (different homotopy classes)
+    # on successive replans; publishing a different one each cycle jerks the
+    # MPCC target and makes the robot dither/loop.  So COMMIT to the current
+    # path and only switch when the goal changed, the old path is now blocked,
+    # the robot strayed off it, or a new plan is meaningfully shorter.
+    path_hysteresis:      true
+    hysteresis_improve:   0.15      # switch only if the new path is >15% shorter
+    hysteresis_max_stray: 0.8       # m — if the robot is farther than this off the
+                                    # committed path, abandon it and replan
+
+    # ── Goal (map frame — the true world location; matches NMPC + RViz) ──
+    goal_x: 13.0
+    goal_y: 0.0
+    goal_reached_tol: 0.35         # m — stop replanning once on the goal
+
+    # ── Frames ────────────────────────────────────────────────
+    map_topic:        /map
+    global_frame:     map          # frame the OccupancyGrid lives in (A* planning)
+    control_frame:    odom          # (unused now — path published in global_frame/map)
+    robot_base_frame: base_link
